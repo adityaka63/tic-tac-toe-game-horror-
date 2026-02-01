@@ -1,0 +1,1662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>The Contract</title>
+    <style>
+        /* UI & HUD STYLES */
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Courier New', Courier, monospace;
+            background-color: #050505;
+            user-select: none;
+            -webkit-user-select: none;
+            color: #bbaaaa;
+            touch-action: none; /* Prevent browser zoom/scroll */
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            z-index: 10;
+        }
+
+        /* Blood Vignette Overlay */
+        #vignette {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            background: radial-gradient(circle, transparent 60%, rgba(50, 0, 0, 0) 100%);
+            transition: background 2s ease-in-out;
+            z-index: 5;
+        }
+
+        /* Crosshair */
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            background: transparent;
+            border: 2px solid rgba(150, 150, 150, 0.5);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            display: none; /* Hidden by default, shown on PC */
+        }
+        /* Show crosshair only on non-touch devices or when pointer locked */
+        body.is-desktop #crosshair { display: block; }
+        
+        #crosshair-dot {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 4px;
+            height: 4px;
+            background: #aa0000;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 5px #ff0000;
+        }
+
+        /* Top HUD */
+        #hud-top {
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            text-shadow: 0 0 5px #000;
+            pointer-events: none;
+        }
+
+        /* Body Parts Bar */
+        #body-parts-bar {
+            display: flex;
+            gap: 15px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border: 1px solid #442222;
+            display: none; /* Hidden until contract signed */
+        }
+        .body-part {
+            padding: 5px;
+            border: 1px solid #555;
+            color: #ddd;
+            font-size: 0.8rem;
+            position: relative;
+        }
+        .body-part.lost {
+            color: #550000;
+            border-color: #330000;
+            text-decoration: line-through;
+            opacity: 0.6;
+        }
+        .body-part.lost::after {
+            content: "X";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: red;
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        #winnings-display {
+            color: #d4af37;
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+
+        /* Dialogue Box */
+        #dialogue-container {
+            position: absolute;
+            bottom: 20%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60%;
+            background: rgba(10, 10, 10, 0.95);
+            border: 1px solid #552222;
+            padding: 20px;
+            color: #ccc;
+            display: none;
+            text-align: center;
+            pointer-events: auto;
+            border-radius: 2px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+            z-index: 20;
+        }
+        #dialogue-text {
+            font-size: 1.1rem;
+            margin-bottom: 15px;
+            line-height: 1.5;
+            font-style: italic;
+        }
+        .btn {
+            background: #222;
+            color: #aaa;
+            border: 1px solid #444;
+            padding: 10px 20px;
+            font-family: inherit;
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: all 0.3s;
+        }
+        .btn:hover { background: #440000; color: #fff; border-color: #880000; }
+
+        /* Contract UI */
+        #contract-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 90%;
+            max-width: 500px;
+            height: auto;
+            max-height: 90vh;
+            overflow-y: auto;
+            background: #dcd0b0; /* Parchment */
+            color: #221;
+            padding: 30px;
+            display: none;
+            flex-direction: column;
+            pointer-events: auto;
+            box-shadow: 0 0 50px #000;
+            font-family: 'Times New Roman', serif;
+            z-index: 100;
+        }
+        #contract-text {
+            flex-grow: 1;
+            font-size: 1rem;
+            line-height: 1.4;
+        }
+        #signature-area {
+            border: 2px dashed #554;
+            background: #eeeadd;
+            cursor: crosshair;
+            margin: 10px 0;
+            width: 100%;
+            touch-action: none;
+        }
+        
+        /* Notifications */
+        #notification {
+            position: absolute;
+            top: 60%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #880000;
+            font-size: 1.5rem;
+            font-weight: bold;
+            text-shadow: 0 0 10px black;
+            opacity: 0;
+            transition: opacity 0.5s;
+            font-family: 'Times New Roman', serif;
+            letter-spacing: 2px;
+            text-align: center;
+            width: 100%;
+        }
+
+        /* Interaction Prompt - Desktop */
+        #interact-prompt {
+            position: absolute;
+            bottom: 10%;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #ccc;
+            font-size: 1rem;
+            text-shadow: 1px 1px 2px black;
+            display: none;
+            opacity: 0.7;
+        }
+
+        /* Controls Help - Now inside the Menu views instead of overlay */
+        #controls-help {
+            display: none; 
+        }
+
+        #blocker {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            color: #888;
+            z-index: 999;
+            pointer-events: auto;
+        }
+
+        .menu-view {
+            text-align: center;
+            display: none; /* Hidden by default, toggled via JS */
+            flex-direction: column;
+            gap: 20px;
+            width: 90%;
+            max-width: 400px;
+        }
+
+        .menu-view h1, .menu-view h2 { 
+            font-family: 'Times New Roman', serif; 
+            color: #aa4444; 
+            letter-spacing: 5px; 
+            margin-bottom: 20px;
+        }
+        
+        .menu-btn { 
+            background: transparent;
+            border: 1px solid #444; 
+            color: #888; 
+            padding: 15px;
+            font-family: inherit;
+            font-size: 1.2rem;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .menu-btn:hover { 
+            background: #220000; 
+            color: #ccaaaa; 
+            border-color: #884444; 
+        }
+
+        /* Slider Styles */
+        .setting-row {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 15px;
+            color: #aaa;
+        }
+        input[type=range] {
+            width: 100%;
+            background: #333;
+            accent-color: #880000;
+        }
+
+        /* --- MOBILE CONTROLS --- */
+        #mobile-controls {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 50;
+            display: none; /* Shown via JS detection */
+        }
+
+        .mobile-btn {
+            position: absolute;
+            background: rgba(50, 50, 50, 0.3);
+            border: 2px solid rgba(150, 150, 150, 0.4);
+            border-radius: 50%;
+            color: rgba(255, 255, 255, 0.7);
+            font-weight: bold;
+            pointer-events: auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            touch-action: manipulation;
+        }
+        .mobile-btn:active {
+            background: rgba(150, 50, 50, 0.5);
+            border-color: rgba(200, 200, 200, 0.8);
+        }
+
+        /* Pause Button (Top Right) */
+        #btn-pause-mobile {
+            top: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+        }
+
+        /* D-Pad Container (Bottom Left) */
+        #dpad-container {
+            position: absolute;
+            bottom: 40px;
+            left: 40px;
+            width: 150px;
+            height: 150px;
+        }
+        #btn-up { top: 0; left: 50px; width: 50px; height: 50px; }
+        #btn-down { bottom: 0; left: 50px; width: 50px; height: 50px; }
+        #btn-left { top: 50px; left: 0; width: 50px; height: 50px; }
+        #btn-right { top: 50px; right: 0; width: 50px; height: 50px; }
+
+        /* Jump (Bottom Right) */
+        #btn-jump-mobile {
+            bottom: 60px;
+            right: 40px;
+            width: 80px;
+            height: 80px;
+            font-size: 1rem;
+        }
+
+        /* Context Interaction (Near Jump) */
+        #btn-interact-mobile {
+            bottom: 160px;
+            right: 40px;
+            width: 70px;
+            height: 70px;
+            border-color: #ffff00;
+            color: #ffff00;
+            background: rgba(50, 50, 0, 0.3);
+            display: none; /* Hidden until close */
+        }
+
+    </style>
+    <!-- Three.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <div id="vignette"></div>
+
+    <!-- UI Overlay -->
+    <div id="ui-layer">
+        <div id="hud-top">
+            <div id="body-parts-bar">
+                <!-- Populated via JS -->
+            </div>
+            <div id="winnings-display">$0</div>
+        </div>
+
+        <div id="crosshair"><div id="crosshair-dot"></div></div>
+        <div id="notification"></div>
+        <div id="interact-prompt">[E] Speak</div>
+    </div>
+
+    <!-- Mobile Controls -->
+    <div id="mobile-controls">
+        <button id="btn-pause-mobile" class="mobile-btn">MENU</button>
+        
+        <div id="dpad-container">
+            <button id="btn-up" class="mobile-btn">^</button>
+            <button id="btn-left" class="mobile-btn"><</button>
+            <button id="btn-right" class="mobile-btn">></button>
+            <button id="btn-down" class="mobile-btn">v</button>
+        </div>
+
+        <button id="btn-interact-mobile" class="mobile-btn">SPEAK</button>
+        <button id="btn-jump-mobile" class="mobile-btn">JUMP</button>
+    </div>
+
+    <!-- Dialogue Box -->
+    <div id="dialogue-container">
+        <div id="dialogue-text">...</div>
+        <button id="dialogue-btn" class="btn">Continue</button>
+    </div>
+
+    <!-- Contract UI -->
+    <div id="contract-container">
+        <h2 style="text-align: center; text-decoration: underline;">THE AGREEMENT</h2>
+        <div id="contract-text">
+            <p>I, the undersigned, hereby agree to the terms set forth by The Dealer.</p>
+            <p><strong>REWARD:</strong> For each victory, I shall receive one gold bar valued at $1,000,000.</p>
+            <p><strong>PENALTY:</strong> For each failure, The Dealer shall collect one piece of my physical being as payment.</p>
+            <p style="font-size: 0.8rem; color: #550000;">Terms are non-negotiable. Death is the final release.</p>
+        </div>
+        <label>Sign Here:</label>
+        <canvas id="signature-area" width="440" height="100"></canvas>
+        <button id="sign-btn" class="btn" style="width: 100%; margin-top: 10px;">SUBMIT SOUL</button>
+    </div>
+
+    <!-- MAIN MENU BLOCKER -->
+    <div id="blocker">
+        
+        <!-- View 1: Initial Start -->
+        <div id="menu-start" class="menu-view">
+            <h1>THE CONTRACT</h1>
+            <p style="color: #555;">A game of Xs and Os.</p>
+            <p style="font-size: 0.8rem; color: #444;">WASD / Touch to Move</p>
+            <button id="btn-wake-up" class="menu-btn">Wake Up</button>
+        </div>
+
+        <!-- View 2: Pause Menu -->
+        <div id="menu-pause" class="menu-view">
+            <h2>MENU</h2>
+            <button id="btn-continue" class="menu-btn">Continue</button>
+            <button id="btn-settings" class="menu-btn">Settings</button>
+        </div>
+
+        <!-- View 3: Settings -->
+        <div id="menu-settings" class="menu-view">
+            <h2>SETTINGS</h2>
+            
+            <div class="setting-row">
+                <label>Mouse/Touch Sensitivity: <span id="sens-value">2.0</span></label>
+                <input type="range" id="sens-slider" min="0.5" max="5.0" step="0.1" value="2.0">
+            </div>
+
+            <div class="setting-row">
+                <label>Master Volume: <span id="vol-value">1.0</span></label>
+                <input type="range" id="vol-slider" min="0.0" max="1.0" step="0.1" value="1.0">
+            </div>
+
+            <button id="btn-back" class="menu-btn" style="margin-top: 10px;">Back</button>
+        </div>
+
+    </div>
+
+    <script>
+        /**
+         * ------------------------------------------------------------------
+         * CONFIGURATION & HORROR CONSTANTS
+         * ------------------------------------------------------------------
+         */
+        const CONFIG = {
+            moveSpeed: 30.0,
+            runSpeedMultiplier: 1.8, 
+            jumpForce: 15.0, 
+            gravity: 35.0,
+            playerHeight: 1.7,
+            interactDist: 4.5,
+            boardBaseHeight: 0.0,
+            boardCellSize: 1.5,
+            topRowHeightThreshold: 2.8,
+            sensitivity: 0.002,
+            footstepInterval: 0.5,
+            
+            // Horror Config
+            initialEasyWins: 3,
+            fogDensity: 0.012, 
+            rainCount: 2000,
+
+            // TTS Settings
+            ENABLE_DEALER_TTS: true,
+            DEALER_TTS_PITCH: 0.1, 
+            DEALER_TTS_RATE: 1.0, 
+            DEALER_TTS_VOLUME: 1.0,
+            DEALER_TTS_WHISPER_CHANCE: 0.25
+        };
+
+        const HORROR_STATE = {
+            contractSigned: false,
+            bodyParts: [
+                { name: "L. Eye", lost: false },
+                { name: "R. Ear", lost: false },
+                { name: "Fingers", lost: false },
+                { name: "Teeth", lost: false },
+                { name: "Skin", lost: false },
+                { name: "Soul", lost: false } 
+            ],
+            currentWinnings: 0,
+            drawStreak: 0,
+            gamesWon: 0,
+            isGlitching: false,
+            isDead: false,
+            cheatUsedThisRound: false,
+            drawsBeforeCheating: 3 
+        };
+
+        const STATE = {
+            hasStarted: false,
+            isPlaying: false,
+            isDialogue: false,
+            isContract: false,
+            isRunning: false,
+            turn: 'player', 
+            board: Array(9).fill(null),
+            gameActive: false,
+            gameEnded: false,
+            isMobile: false 
+        };
+
+        // Dialogue Arrays
+        const DIALOGUE_BODY_PART_LOSS = [
+            "Another piece... for the collection.",
+            "You were not using that anyway.",
+            "Flesh is transient. Gold is eternal.",
+            "A fair trade... I assure you.",
+            "Do you feel lighter?",
+            "Delicious...",
+            "The contract... demands it."
+        ];
+
+        const DIALOGUE_CHEAT_WARNING = [
+            "THE AIR GROWS COLD...",
+            "SOMETHING IS WATCHING...",
+            "THE SHADOWS LENGTHEN...",
+            "REALITY BENDS...",
+            "HE GROWS IMPATIENT...",
+            "DO NOT BLINK..."
+        ];
+
+        const DIALOGUE_CHEAT_EXECUTE = [
+            "I make the rules now.",
+            "Did you think you could win?",
+            "Mine.",
+            "Look away.",
+            "It moves..."
+        ];
+
+        /**
+         * ------------------------------------------------------------------
+         * THREE.JS SETUP
+         * ------------------------------------------------------------------
+         */
+        let camera, scene, renderer;
+        let controls, pitchObj, handsGroup;
+        let leftHand, rightHand; 
+        let raycaster;
+        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+        let canJump = false;
+        let velocity = new THREE.Vector3();
+        let direction = new THREE.Vector3(); 
+        let prevTime = performance.now();
+        let footstepTimer = 0;
+
+        let boardMeshes = [];
+        let placedPieces = [];
+        let npcMesh, npcEyes;
+        let boardGroup, resetButtonMesh; 
+        let rainGeo, rainSystem;
+        let flashLight; 
+        let fireLights = []; 
+        let clouds = []; 
+        
+        let colliders = [];
+        const playerSize = new THREE.Vector3(0.8, 1.8, 0.8);
+        const playerBox = new THREE.Box3();
+
+        // Audio System
+        let audioCtx;
+        let masterGain; // Global volume
+        let rainNode;
+        let demonOsc1, demonOsc2, demonGain, demonFilter, demonShaper;
+        let ttsVoice = null; 
+
+        // Touch Tracking
+        let lastTouchX = null, lastTouchY = null;
+        let touchDragId = null;
+
+        init();
+        initTTS();
+        animate();
+
+        function init() {
+            // Detect Mobile
+            STATE.isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+            if (STATE.isMobile) {
+                document.getElementById('mobile-controls').style.display = 'block';
+                document.body.classList.remove('is-desktop');
+                CONFIG.sensitivity *= 1.5; // Touch needs higher sens
+            } else {
+                document.body.classList.add('is-desktop');
+            }
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x050810); 
+            scene.fog = new THREE.FogExp2(0x050810, CONFIG.fogDensity);
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            
+            const ambientLight = new THREE.AmbientLight(0x444455); 
+            scene.add(ambientLight);
+
+            const npcLight = new THREE.PointLight(0xaa4400, 1, 10);
+            npcLight.position.set(4, 0.5, -7);
+            scene.add(npcLight);
+            fireLights.push({ light: npcLight, base: 1.0, flicker: 0.3 });
+
+            flashLight = new THREE.DirectionalLight(0x8899aa, 0);
+            flashLight.position.set(20, 50, 20);
+            scene.add(flashLight);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            document.body.appendChild(renderer.domElement);
+
+            setupControls();
+            setupMobileControls();
+            createWorld();
+            createSky();
+            createRain();
+            setupInteractUI();
+
+            raycaster = new THREE.Raycaster();
+
+            window.addEventListener('resize', onWindowResize);
+            // PC Controls
+            document.addEventListener('keydown', onKeyDown);
+            document.addEventListener('keyup', onKeyUp);
+            document.addEventListener('click', onClick); // Handles tap too
+            document.addEventListener('mousemove', onMouseMove);
+
+            // Touch Camera
+            document.addEventListener('touchstart', onTouchStart, { passive: false });
+            document.addEventListener('touchmove', onTouchMove, { passive: false });
+            document.addEventListener('touchend', onTouchEnd);
+            
+            document.getElementById('dialogue-btn').addEventListener('click', advanceDialogue);
+            setupMenuLogic();
+        }
+
+        // --- MENU LOGIC ---
+        function setupMenuLogic() {
+            // Start Screen Button
+            document.getElementById('btn-wake-up').addEventListener('click', () => {
+                STATE.hasStarted = true;
+                if (!STATE.isMobile) document.body.requestPointerLock();
+                else {
+                    STATE.isPlaying = true;
+                    document.getElementById('blocker').style.display = 'none';
+                }
+                if (!audioCtx) initAudio();
+            });
+
+            // Pause Menu Buttons
+            document.getElementById('btn-continue').addEventListener('click', () => {
+                if (!STATE.isMobile) document.body.requestPointerLock();
+                else {
+                    STATE.isPlaying = true;
+                    document.getElementById('blocker').style.display = 'none';
+                }
+            });
+
+            document.getElementById('btn-settings').addEventListener('click', () => {
+                document.getElementById('menu-pause').style.display = 'none';
+                document.getElementById('menu-settings').style.display = 'flex';
+            });
+
+            // Settings Buttons
+            document.getElementById('btn-back').addEventListener('click', () => {
+                document.getElementById('menu-settings').style.display = 'none';
+                document.getElementById('menu-pause').style.display = 'flex';
+            });
+
+            // Sliders
+            document.getElementById('sens-slider').addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value);
+                document.getElementById('sens-value').innerText = val.toFixed(1);
+                CONFIG.sensitivity = val / 1000;
+            });
+
+            document.getElementById('vol-slider').addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value);
+                document.getElementById('vol-value').innerText = val.toFixed(1);
+                if(masterGain) masterGain.gain.setTargetAtTime(val, audioCtx.currentTime, 0.1);
+            });
+
+            // Initialize Menu State
+            showMenu('start');
+        }
+
+        function showMenu(type) {
+            const start = document.getElementById('menu-start');
+            const pause = document.getElementById('menu-pause');
+            const settings = document.getElementById('menu-settings');
+            
+            start.style.display = 'none';
+            pause.style.display = 'none';
+            settings.style.display = 'none';
+
+            if(type === 'start') start.style.display = 'flex';
+            else if(type === 'pause') pause.style.display = 'flex';
+            else if(type === 'settings') settings.style.display = 'flex';
+        }
+
+        function initTTS() {
+            if ('speechSynthesis' in window) {
+                const findVoice = () => {
+                    const voices = window.speechSynthesis.getVoices();
+                    ttsVoice = voices.find(v => v.name.includes("Google US English Male")) || 
+                               voices.find(v => v.name.includes("Microsoft David")) || 
+                               voices.find(v => v.name.includes("Daniel")) ||
+                               voices.find(v => v.name.toLowerCase().includes("male")) || 
+                               voices.find(v => v.lang === "en-US" && !v.name.includes("Zira") && !v.name.includes("Female")) ||
+                               voices[0];
+                };
+                window.speechSynthesis.onvoiceschanged = findVoice;
+                findVoice();
+            }
+        }
+
+        function createSky() {
+            const cloudGeo = new THREE.SphereGeometry(15, 8, 8);
+            const cloudMat = new THREE.MeshBasicMaterial({ color: 0x111122, transparent: true, opacity: 0.6 });
+            for(let i=0; i<15; i++) {
+                const cloud = new THREE.Mesh(cloudGeo, cloudMat);
+                cloud.scale.set(2 + Math.random(), 0.3, 1.5 + Math.random());
+                cloud.position.set((Math.random()-0.5)*200, 30+Math.random()*10, (Math.random()-0.5)*200);
+                scene.add(cloud);
+                clouds.push(cloud);
+            }
+        }
+
+        function createWorld() {
+            const groundGeo = new THREE.PlaneGeometry(200, 200, 50, 50);
+            const posAttr = groundGeo.attributes.position;
+            for(let i=0; i<posAttr.count; i++) posAttr.setZ(i, Math.random() * 0.5);
+            groundGeo.computeVertexNormals();
+            const groundMat = new THREE.MeshStandardMaterial({ color: 0x1a1510, roughness: 0.9, flatShading: true });
+            const ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            function addCollider(mesh) {
+                mesh.updateMatrixWorld(true);
+                colliders.push(new THREE.Box3().setFromObject(mesh));
+            }
+
+            for(let i=0; i<60; i++) {
+                const height = 10 + Math.random() * 15;
+                const x = (Math.random() - 0.5) * 120;
+                const z = (Math.random() - 0.5) * 120;
+                if(Math.abs(x) < 20 && Math.abs(z) < 20) continue; 
+                const treeGroup = new THREE.Group();
+                treeGroup.position.set(x, 0, z);
+                const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.8, height, 6), new THREE.MeshStandardMaterial({ color: 0x110d0a, roughness: 1.0 }));
+                trunk.position.y = height/2;
+                treeGroup.add(trunk);
+                const leafMat = new THREE.MeshStandardMaterial({ color: 0x0a1a0a, roughness: 0.9 });
+                const levels = 3 + Math.floor(Math.random()*2);
+                for(let j=0; j<levels; j++) {
+                    const cone = new THREE.Mesh(new THREE.ConeGeometry(3 - j*0.6, 4 + Math.random()*2, 7), leafMat);
+                    cone.position.y = height - j*2.5;
+                    treeGroup.add(cone);
+                }
+                scene.add(treeGroup);
+                const box = new THREE.Box3();
+                box.setFromCenterAndSize(new THREE.Vector3(x, height/2, z), new THREE.Vector3(1.5, height, 1.5));
+                colliders.push(box);
+            }
+
+            createCampfire(7, 0, -6);
+
+            boardGroup = new THREE.Group();
+            boardGroup.position.set(0, 0, -10);
+            scene.add(boardGroup);
+
+            const frame = new THREE.Mesh(new THREE.BoxGeometry(5, 5, 0.5), new THREE.MeshStandardMaterial({ color: 0x332211, roughness: 0.9 }));
+            frame.position.y = 2.5 + CONFIG.boardBaseHeight;
+            frame.userData.isSolid = true;
+            boardGroup.add(frame);
+
+            createTorch(frame, -2.5, 5.2, 0); 
+            createTorch(frame, 2.5, 5.2, 0);  
+
+            const gap = CONFIG.boardCellSize + 0.1;
+            for (let i = 0; i < 9; i++) {
+                const row = Math.floor(i / 3);
+                const col = i % 3;
+                const cell = new THREE.Mesh(new THREE.PlaneGeometry(CONFIG.boardCellSize, CONFIG.boardCellSize), new THREE.MeshStandardMaterial({ color: 0x222222, side: THREE.DoubleSide }));
+                cell.position.set((col - 1) * gap, 2.5 + (1 - row) * gap, 0.26);
+                cell.userData = { index: i, type: 'cell', row: row };
+                boardGroup.add(cell);
+                boardMeshes.push(cell);
+            }
+
+            const pedestal = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.2, 0.8), new THREE.MeshLambertMaterial({ color: 0x222222 }));
+            pedestal.position.set(-4.5, 0.6, -9);
+            pedestal.userData.isSolid = true;
+            scene.add(pedestal);
+
+            resetButtonMesh = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.2, 0.5), new THREE.MeshLambertMaterial({ color: 0x550000, emissive: 0x220000 }));
+            resetButtonMesh.position.set(-4.5, 1.3, -9);
+            scene.add(resetButtonMesh);
+
+            createNPC();
+
+            scene.updateMatrixWorld(true);
+            scene.traverse(o => { if(o.userData.isSolid) addCollider(o); });
+            const npcBox = new THREE.Box3();
+            npcBox.setFromCenterAndSize(new THREE.Vector3(4, 0.9, -8), new THREE.Vector3(1, 2, 1));
+            colliders.push(npcBox);
+        }
+
+        function createTorch(parent, x, y, z) {
+            const torchGroup = new THREE.Group();
+            torchGroup.position.set(x, 2.8, 0.2); 
+            torchGroup.rotation.z = x > 0 ? -0.5 : 0.5; 
+            parent.add(torchGroup);
+            torchGroup.add(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.8), new THREE.MeshStandardMaterial({ color: 0x221100 })));
+            const flame = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.3, 6), new THREE.MeshBasicMaterial({ color: 0xffaa00 }));
+            flame.position.y = 0.4;
+            torchGroup.add(flame);
+            const light = new THREE.PointLight(0xffaa00, 1, 8);
+            light.position.y = 0.5;
+            torchGroup.add(light);
+            fireLights.push({ light: light, base: 1.0, flicker: 0.2 });
+        }
+
+        function createCampfire(x, y, z) {
+            const group = new THREE.Group();
+            group.position.set(x, y, z);
+            scene.add(group);
+            for(let i=0; i<3; i++) {
+                const log = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 1), new THREE.MeshStandardMaterial({ color: 0x332211 }));
+                log.rotation.z = Math.PI/2; log.rotation.y = i * (Math.PI/3); log.position.y = 0.1;
+                group.add(log);
+            }
+            const fire = new THREE.Mesh(new THREE.ConeGeometry(0.4, 1, 6), new THREE.MeshBasicMaterial({ color: 0xff4400 }));
+            fire.position.y = 0.5; group.add(fire);
+            const light = new THREE.PointLight(0xff6600, 2, 20);
+            light.position.y = 1.0; group.add(light);
+            fireLights.push({ light: light, base: 2.0, flicker: 0.5 });
+            const box = new THREE.Box3();
+            box.setFromCenterAndSize(new THREE.Vector3(x, 0.5, z), new THREE.Vector3(1.5, 1, 1.5));
+            colliders.push(box);
+        }
+
+        function createNPC() {
+            const npcGroup = new THREE.Group();
+            npcGroup.position.set(4, 0, -8);
+            npcGroup.rotation.y = -Math.PI / 4; 
+            scene.add(npcGroup);
+            npcMesh = npcGroup;
+
+            const body = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.6, 2.2, 8), new THREE.MeshLambertMaterial({ color: 0x110d0a }));
+            body.position.y = 1.1; npcGroup.add(body);
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 16), new THREE.MeshLambertMaterial({ color: 0xccccaa }));
+            head.position.y = 2.4; npcGroup.add(head);
+            const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 0.05, 12), new THREE.MeshLambertMaterial({ color: 0x110d0a }));
+            brim.position.y = 2.7; npcGroup.add(brim);
+            const hatTop = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.4, 12), new THREE.MeshLambertMaterial({ color: 0x110d0a }));
+            hatTop.position.y = 2.9; npcGroup.add(hatTop);
+
+            const eyeGeo = new THREE.SphereGeometry(0.05, 8, 8);
+            const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+            const leftEye = new THREE.Mesh(eyeGeo, eyeMat); leftEye.position.set(-0.12, 2.45, 0.28); npcGroup.add(leftEye);
+            const rightEye = new THREE.Mesh(eyeGeo, eyeMat); rightEye.position.set(0.12, 2.45, 0.28); npcGroup.add(rightEye);
+            npcEyes = [leftEye, rightEye];
+        }
+
+        function createRain() {
+            rainGeo = new THREE.BufferGeometry();
+            const rainCount = CONFIG.rainCount;
+            const positions = new Float32Array(rainCount * 3);
+            for(let i=0; i<rainCount*3; i+=3) {
+                positions[i] = (Math.random() - 0.5) * 100;
+                positions[i+1] = Math.random() * 40;
+                positions[i+2] = (Math.random() - 0.5) * 100;
+            }
+            rainGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            rainSystem = new THREE.Points(rainGeo, new THREE.PointsMaterial({ color: 0xaaaaaa, size: 0.1, transparent: true, opacity: 0.6 }));
+            scene.add(rainSystem);
+        }
+
+        function setupControls() {
+            controls = new THREE.Object3D(); controls.rotation.order = 'YXZ'; 
+            pitchObj = new THREE.Object3D(); pitchObj.rotation.order = 'YXZ';
+            pitchObj.add(camera); controls.add(pitchObj); scene.add(controls);
+            controls.position.y = CONFIG.playerHeight;
+
+            handsGroup = new THREE.Group(); pitchObj.add(handsGroup); 
+            const handGeo = new THREE.SphereGeometry(0.1, 16, 16);
+            const handMat = new THREE.MeshLambertMaterial({ color: 0x998877 });
+            leftHand = new THREE.Mesh(handGeo, handMat); leftHand.position.set(-0.3, -0.3, -0.5); handsGroup.add(leftHand);
+            rightHand = new THREE.Mesh(handGeo, handMat); rightHand.position.set(0.3, -0.3, -0.5); handsGroup.add(rightHand);
+
+            document.addEventListener('pointerlockchange', () => {
+                const blocker = document.getElementById('blocker');
+                if (document.pointerLockElement === document.body) {
+                    STATE.isPlaying = true; 
+                    STATE.isDialogue = false; 
+                    blocker.style.display = 'none';
+                } else {
+                    if (STATE.isDialogue || STATE.isContract) { 
+                        STATE.isPlaying = false; 
+                    } else {
+                        STATE.isPlaying = false;
+                        blocker.style.display = 'flex';
+                        if (STATE.hasStarted) showMenu('pause');
+                        else showMenu('start');
+                    }
+                }
+            });
+        }
+
+        // Mobile Controls Wireup
+        function setupMobileControls() {
+            const btnPause = document.getElementById('btn-pause-mobile');
+            const btnUp = document.getElementById('btn-up');
+            const btnDown = document.getElementById('btn-down');
+            const btnLeft = document.getElementById('btn-left');
+            const btnRight = document.getElementById('btn-right');
+            const btnJump = document.getElementById('btn-jump-mobile');
+            const btnInteract = document.getElementById('btn-interact-mobile');
+
+            btnPause.addEventListener('touchstart', (e) => { e.preventDefault(); showMenu('pause'); document.getElementById('blocker').style.display = 'flex'; STATE.isPlaying = false; });
+            
+            const handleMoveBtn = (btn, dir, val) => {
+                btn.addEventListener('touchstart', (e) => { e.preventDefault(); switch(dir){ case 'f': moveForward=true; break; case 'b': moveBackward=true; break; case 'l': moveLeft=true; break; case 'r': moveRight=true; break;} });
+                btn.addEventListener('touchend', (e) => { e.preventDefault(); switch(dir){ case 'f': moveForward=false; break; case 'b': moveBackward=false; break; case 'l': moveLeft=false; break; case 'r': moveRight=false; break;} });
+            };
+
+            handleMoveBtn(btnUp, 'f');
+            handleMoveBtn(btnDown, 'b');
+            handleMoveBtn(btnLeft, 'l');
+            handleMoveBtn(btnRight, 'r');
+
+            btnJump.addEventListener('touchstart', (e) => { 
+                e.preventDefault(); 
+                if (canJump && !STATE.isDialogue && !STATE.isContract) { velocity.y += CONFIG.jumpForce; canJump = false; }
+            });
+
+            btnInteract.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                if (STATE.isDialogue) advanceDialogue(); else tryInteract();
+            });
+        }
+
+        // --- Touch Camera Control ---
+        function onTouchStart(e) {
+            // Ignore if touching UI buttons
+            if (e.target.classList.contains('mobile-btn') || e.target.closest('.menu-view')) return;
+            if (e.touches.length === 1) {
+                lastTouchX = e.touches[0].clientX;
+                lastTouchY = e.touches[0].clientY;
+                touchDragId = e.touches[0].identifier;
+            }
+        }
+
+        function onTouchMove(e) {
+            if (STATE.isPlaying && !STATE.isDialogue && !STATE.isContract && !HORROR_STATE.isDead) {
+                // Find the touch that started the drag
+                for (let i = 0; i < e.changedTouches.length; i++) {
+                    if (e.changedTouches[i].identifier === touchDragId) {
+                        const touch = e.changedTouches[i];
+                        const deltaX = touch.clientX - lastTouchX;
+                        const deltaY = touch.clientY - lastTouchY;
+                        
+                        controls.rotation.y -= deltaX * CONFIG.sensitivity;
+                        pitchObj.rotation.x -= deltaY * CONFIG.sensitivity;
+                        pitchObj.rotation.x = Math.max(-1.5, Math.min(1.5, pitchObj.rotation.x));
+                        
+                        lastTouchX = touch.clientX;
+                        lastTouchY = touch.clientY;
+                        break;
+                    }
+                }
+            }
+        }
+
+        function onTouchEnd(e) {
+            // Clear tracking if our finger lifted
+             for (let i = 0; i < e.changedTouches.length; i++) {
+                if (e.changedTouches[i].identifier === touchDragId) {
+                    touchDragId = null;
+                    break;
+                }
+            }
+        }
+
+        function onMouseMove(event) {
+            if (document.pointerLockElement === document.body && !STATE.isDialogue && !STATE.isContract && !HORROR_STATE.isDead) {
+                controls.rotation.y -= event.movementX * CONFIG.sensitivity;
+                pitchObj.rotation.x -= event.movementY * CONFIG.sensitivity;
+                pitchObj.rotation.x = Math.max(-1.5, Math.min(1.5, pitchObj.rotation.x));
+            }
+        }
+
+        function onKeyDown(event) {
+            if(HORROR_STATE.isDead) return;
+            switch (event.code) {
+                case 'ArrowUp': case 'KeyW': moveForward = true; break;
+                case 'ArrowLeft': case 'KeyA': moveLeft = true; break;
+                case 'ArrowDown': case 'KeyS': moveBackward = true; break;
+                case 'ArrowRight': case 'KeyD': moveRight = true; break;
+                case 'ShiftLeft': case 'ShiftRight': STATE.isRunning = true; break;
+                case 'Space': if (canJump && !STATE.isDialogue && !STATE.isContract) { velocity.y += CONFIG.jumpForce; canJump = false; } break;
+                case 'KeyE': if (STATE.isDialogue) advanceDialogue(); else tryInteract(); break;
+            }
+        }
+        function onKeyUp(event) {
+            switch (event.code) {
+                case 'ArrowUp': case 'KeyW': moveForward = false; break;
+                case 'ArrowLeft': case 'KeyA': moveLeft = false; break;
+                case 'ArrowDown': case 'KeyS': moveBackward = false; break;
+                case 'ArrowRight': case 'KeyD': moveRight = false; break;
+                case 'ShiftLeft': case 'ShiftRight': STATE.isRunning = false; break;
+            }
+        }
+
+        function checkCollision(pos) {
+            playerBox.setFromCenterAndSize(pos, playerSize);
+            for (let box of colliders) { if (playerBox.intersectsBox(box)) return true; }
+            return false;
+        }
+
+        function onClick(event) {
+            if (!STATE.isPlaying || STATE.isDialogue || STATE.isContract || HORROR_STATE.isDead) return;
+            
+            // Raycasting logic for click/tap
+            const coords = new THREE.Vector2();
+            if (document.pointerLockElement) {
+                // PC: Center
+                coords.set(0, 0);
+            } else {
+                // Mobile/Unlock: Touch Coords
+                // Use event coords if available (click or simulated click from tap)
+                // Note: 'click' on mobile fires after touchend at the tap location
+                coords.x = (event.clientX / window.innerWidth) * 2 - 1;
+                coords.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            }
+
+            raycaster.setFromCamera(coords, camera);
+            const intersects = raycaster.intersectObjects(boardMeshes);
+            if (intersects.length > 0) {
+                const hit = intersects[0];
+                const cellData = hit.object.userData;
+                const dist = controls.position.distanceTo(hit.point);
+                if (dist > CONFIG.interactDist + 2) return;
+                if (STATE.gameActive && STATE.turn === 'player') attemptPlacePiece(cellData.index, cellData.row);
+                return;
+            }
+        }
+
+        function attemptPlacePiece(index, row) {
+            if (STATE.board[index] !== null) { showNotification("Space occupied."); return; }
+            if (row === 0 && controls.position.y < CONFIG.topRowHeightThreshold) {
+                showNotification("Too high. Must JUMP."); playSound('click'); return;
+            }
+            makeMove(index, 'player');
+        }
+
+        function makeMove(index, who) {
+            STATE.board[index] = who;
+            const targetCell = boardMeshes[index];
+            createPieceVisual(targetCell.position, who);
+            if(who === 'player') playSound('placeX'); else playSound('placeO');
+
+            if (checkWin(who)) { endGame(who); }
+            else if (STATE.board.every(c => c !== null)) { endGame('draw'); }
+            else {
+                if (who === 'player') {
+                    STATE.turn = 'npc';
+                    document.getElementById('interact-prompt').innerText = "Dealer is thinking...";
+                    setTimeout(aiTurn, 800 + Math.random() * 500);
+                } else {
+                    STATE.turn = 'player';
+                    document.getElementById('interact-prompt').innerText = "Your move.";
+                }
+            }
+        }
+
+        function createPieceVisual(pos, type) {
+            const visualPos = pos.clone();
+            visualPos.z += 0.2;
+            let mesh;
+            if (type === 'player') {
+                const group = new THREE.Group();
+                const geo = new THREE.BoxGeometry(1, 0.2, 0.2);
+                const mat = new THREE.MeshStandardMaterial({ color: 0xaa0000, emissive: 0x330000 });
+                const bar1 = new THREE.Mesh(geo, mat); bar1.rotation.z = Math.PI/4;
+                const bar2 = new THREE.Mesh(geo, mat); bar2.rotation.z = -Math.PI/4;
+                group.add(bar1); group.add(bar2);
+                mesh = group;
+            } else {
+                const geo = new THREE.TorusGeometry(0.4, 0.1, 8, 20);
+                const mat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+                mesh = new THREE.Mesh(geo, mat);
+            }
+            mesh.position.set(boardMeshes[boardMeshes.length-1].parent.children.find(c => c.position.equals(pos)).position.x,
+                              boardMeshes[boardMeshes.length-1].parent.children.find(c => c.position.equals(pos)).position.y, 0.5);
+            boardGroup.add(mesh);
+            placedPieces.push(mesh);
+        }
+
+        function aiTurn() {
+            if (!STATE.gameActive) return;
+
+            // Cheat Trigger Logic
+            if (HORROR_STATE.gamesWon >= 3 && 
+                HORROR_STATE.drawStreak >= HORROR_STATE.drawsBeforeCheating && 
+                !HORROR_STATE.cheatUsedThisRound) {
+                
+                // Find target for cheat (Piece Stealing)
+                let targetIdx = -1;
+                // Priority: Steal blocking piece to win
+                const lines = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+                for (let line of lines) {
+                    let aiCount = 0, playerCount = 0, playerPos = -1;
+                    line.forEach(idx => {
+                        if(STATE.board[idx] === 'npc') aiCount++;
+                        else if(STATE.board[idx] === 'player') { playerCount++; playerPos = idx; }
+                    });
+                    if (aiCount === 2 && playerCount === 1) { targetIdx = playerPos; break; }
+                }
+                // Fallback: Steal any piece
+                if (targetIdx === -1) {
+                    const playerIndices = STATE.board.map((v,i)=>v==='player'?i:-1).filter(i=>i!==-1);
+                    if (playerIndices.length > 0) targetIdx = playerIndices[Math.floor(Math.random()*playerIndices.length)];
+                }
+
+                if (targetIdx !== -1) {
+                    HORROR_STATE.cheatUsedThisRound = true;
+                    playSound('scare');
+                    
+                    setTimeout(() => {
+                        doGlitchEffect();
+                        speakDealer(DIALOGUE_CHEAT_EXECUTE[Math.floor(Math.random() * DIALOGUE_CHEAT_EXECUTE.length)]);
+
+                        // 1. Remove Player Visual
+                        const cellPos = boardMeshes[targetIdx].position;
+                        let closestPiece = null, minD = 999, closestIdx = -1;
+                        placedPieces.forEach((p, i) => {
+                            const d = p.position.distanceTo(cellPos);
+                            if(d < 0.5) { minD = d; closestPiece = p; closestIdx = i; }
+                        });
+                        if(closestPiece) { boardGroup.remove(closestPiece); placedPieces.splice(closestIdx, 1); }
+
+                        // 2. Take Spot
+                        STATE.board[targetIdx] = 'npc';
+                        createPieceVisual(cellPos, 'npc');
+                        playSound('placeO');
+
+                        if (checkWin('npc')) { endGame('npc'); return; }
+
+                        // 3. Double Turn
+                        const available = STATE.board.map((v, i) => v === null ? i : null).filter(v => v !== null);
+                        if (available.length > 0) {
+                            makeMove(available[Math.floor(Math.random() * available.length)], 'npc');
+                        } else {
+                            endGame('npc');
+                        }
+                    }, 800);
+                    return;
+                }
+            }
+
+            // Standard Move Logic
+            let move;
+            if (HORROR_STATE.gamesWon < CONFIG.initialEasyWins) {
+                const available = STATE.board.map((v, i) => v === null ? i : null).filter(v => v !== null);
+                move = available[Math.floor(Math.random() * available.length)];
+            } else {
+                move = getBestMove(STATE.board, 'npc');
+            }
+            if (move !== undefined) makeMove(move, 'npc');
+        }
+
+        function getBestMove(board, player) {
+            let bestScore = -Infinity;
+            let move;
+            for(let i=0; i<9; i++) {
+                if(board[i]===null) {
+                    board[i] = player;
+                    let score = minimax(board, 0, false);
+                    board[i] = null;
+                    if(score > bestScore) { bestScore = score; move = i; }
+                }
+            }
+            return move;
+        }
+
+        const scores = { npc: 10, player: -10, tie: 0 };
+        function minimax(board, depth, isMaximizing) {
+            let result = checkWinnerSim(board);
+            if (result !== null) return scores[result];
+            if (isMaximizing) {
+                let bestScore = -Infinity;
+                for (let i = 0; i < 9; i++) {
+                    if (board[i] === null) {
+                        board[i] = 'npc';
+                        let score = minimax(board, depth + 1, false);
+                        board[i] = null;
+                        bestScore = Math.max(score, bestScore);
+                    }
+                }
+                return bestScore;
+            } else {
+                let bestScore = Infinity;
+                for (let i = 0; i < 9; i++) {
+                    if (board[i] === null) {
+                        board[i] = 'player';
+                        let score = minimax(board, depth + 1, true);
+                        board[i] = null;
+                        bestScore = Math.min(score, bestScore);
+                    }
+                }
+                return bestScore;
+            }
+        }
+        function checkWinnerSim(board) {
+            const lines = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+            for (let line of lines) {
+                const [a, b, c] = line;
+                if (board[a] && board[a] === board[b] && board[a] === board[c]) return board[a];
+            }
+            if (board.every(c => c !== null)) return 'tie';
+            return null;
+        }
+        function checkWin(who) { return checkWinnerSim(STATE.board) === who; }
+
+        function endGame(result) {
+            STATE.gameActive = false;
+            STATE.gameEnded = true; 
+            
+            if (result === 'player') {
+                HORROR_STATE.gamesWon++;
+                HORROR_STATE.currentWinnings += 1000000;
+                HORROR_STATE.drawStreak = 0;
+                playSound('cash');
+                updateHUD();
+                showNotification("PAYMENT RECEIVED.");
+                if (HORROR_STATE.gamesWon === CONFIG.initialEasyWins) speakDealer("Easy... right?");
+                setTimeout(resetBoard, 3000);
+            } else if (result === 'npc') {
+                HORROR_STATE.drawStreak = 0;
+                if(HORROR_STATE.cheatUsedThisRound) {
+                    HORROR_STATE.drawsBeforeCheating = Math.floor(Math.random() * 3) + 1; // Randomize next cheat requirement
+                }
+                handleBodyPartLoss(); 
+            } else {
+                // Stalemate - Only punish if past easy wins
+                if (HORROR_STATE.gamesWon >= CONFIG.initialEasyWins) {
+                    HORROR_STATE.drawStreak++;
+                }
+                playSound('place'); 
+                showNotification("STALEMATE.");
+                setTimeout(resetBoard, 3000);
+            }
+        }
+
+        function handleBodyPartLoss() {
+            const partIdx = HORROR_STATE.bodyParts.findIndex(p => !p.lost);
+            if (partIdx === -1) return;
+            const part = HORROR_STATE.bodyParts[partIdx];
+            part.lost = true;
+            playSound('scare'); 
+            setTimeout(() => {
+                playSound('crunch');
+                updateHUD(); 
+                applyBloodVignette(partIdx);
+                if (part.name === "Soul") {
+                    speakDealer("Your debt... is paid.");
+                    triggerDeath();
+                } else {
+                    showNotification(`LOST: ${part.name.toUpperCase()}`);
+                    speakDealer(DIALOGUE_BODY_PART_LOSS[Math.floor(Math.random() * DIALOGUE_BODY_PART_LOSS.length)]);
+                    setTimeout(resetBoard, 2000);
+                }
+            }, 1000);
+        }
+
+        function applyBloodVignette(stage) {
+            const opacity = (stage + 1) * 0.15;
+            const vignette = document.getElementById('vignette');
+            const centerSize = Math.max(0, 60 - stage * 8); 
+            vignette.style.background = `radial-gradient(circle, transparent ${centerSize}%, rgba(${80 + stage * 20}, 0, 0, ${opacity}) 100%)`;
+        }
+
+        function triggerDeath() {
+            HORROR_STATE.isDead = true;
+            document.getElementById('notification').innerText = "CONTRACT TERMINATED.";
+            document.getElementById('notification').style.opacity = 1;
+            const blocker = document.getElementById('blocker');
+            blocker.style.display = 'flex';
+            blocker.style.backgroundColor = 'black';
+            blocker.innerHTML = `<h1 style='color:#500'>VOID</h1><p>Refresh to resurrect.</p>`;
+            document.exitPointerLock();
+        }
+
+        function doGlitchEffect() {
+            playSound('glitch');
+            const originalRot = camera.rotation.z;
+            let glitchFrames = 20;
+            const interval = setInterval(() => {
+                camera.rotation.z = (Math.random() - 0.5) * 0.5;
+                scene.fog.density = Math.random() * 0.1;
+                glitchFrames--;
+                if(glitchFrames <= 0) {
+                    clearInterval(interval);
+                    camera.rotation.z = originalRot;
+                    scene.fog.density = CONFIG.fogDensity;
+                }
+            }, 50);
+        }
+
+        function resetBoard() {
+            if(HORROR_STATE.isDead) return;
+            STATE.board = Array(9).fill(null);
+            placedPieces.forEach(m => boardGroup.remove(m));
+            placedPieces = [];
+            STATE.gameActive = true;
+            STATE.gameEnded = false;
+            STATE.turn = 'player';
+            HORROR_STATE.cheatUsedThisRound = false;
+            resetButtonMesh.material.emissive.setHex(0x220000);
+            showNotification("");
+
+            if (HORROR_STATE.gamesWon >= CONFIG.initialEasyWins && 
+                HORROR_STATE.drawStreak >= HORROR_STATE.drawsBeforeCheating) {
+                setTimeout(() => { playSound('scare'); }, 500); 
+                showNotification(DIALOGUE_CHEAT_WARNING[Math.floor(Math.random() * DIALOGUE_CHEAT_WARNING.length)]);
+            }
+        }
+
+        function updateHUD() {
+            document.getElementById('winnings-display').innerText = "$" + HORROR_STATE.currentWinnings.toLocaleString();
+            const bar = document.getElementById('body-parts-bar');
+            bar.innerHTML = "";
+            HORROR_STATE.bodyParts.forEach(p => {
+                const el = document.createElement('div');
+                el.className = "body-part" + (p.lost ? " lost" : "");
+                el.innerText = p.name;
+                bar.appendChild(el);
+            });
+        }
+
+        function setupInteractUI() { updateHUD(); }
+
+        const dialogueLines = [
+            "Greetings... traveler.",
+            "Nasty weather we're having. Care for a game?",
+            "Oh, I don't play for points. I'm a businessman.",
+            "I have a contract. Win, and you get $1,000,000.",
+            "Lose... and I take a piece of you.",
+            "Just a finger here, an ear there. You won't miss them.",
+            "Do we have a deal?"
+        ];
+        let dialogueIndex = 0;
+
+        function tryInteract() {
+            const dist = controls.position.distanceTo(npcMesh.position);
+            if (dist < CONFIG.interactDist) { startDialogue(); }
+        }
+
+        function startDialogue() {
+            if (HORROR_STATE.contractSigned && STATE.gameActive) return;
+            if (HORROR_STATE.contractSigned && !STATE.gameActive) { showNotification("The board is waiting."); return; }
+            STATE.isDialogue = true;
+            dialogueIndex = 0;
+            document.exitPointerLock(); 
+            document.getElementById('dialogue-container').style.display = 'block';
+            updateDialogue();
+        }
+
+        function updateDialogue() {
+            const txt = document.getElementById('dialogue-text');
+            const btn = document.getElementById('dialogue-btn');
+            if (dialogueIndex < dialogueLines.length) {
+                const line = dialogueLines[dialogueIndex];
+                txt.innerText = line;
+                btn.innerText = "Next";
+                speakDealer(line);
+                npcMesh.rotation.z = (Math.random() - 0.5) * 0.2;
+            } else { endDialogue(); }
+        }
+        function advanceDialogue() { 
+            dialogueIndex++; 
+            playSound('click');
+            window.speechSynthesis.cancel();
+            if(audioCtx) stopHorrorDrone();
+            updateDialogue(); 
+        }
+        function endDialogue() {
+            STATE.isDialogue = false;
+            document.getElementById('dialogue-container').style.display = 'none';
+            showContract();
+        }
+
+        function showContract() {
+            STATE.isContract = true;
+            document.getElementById('contract-container').style.display = 'flex';
+            speakDealer("Sign... here.");
+            setupSignatureCanvas();
+        }
+
+        function setupSignatureCanvas() {
+            const canvas = document.getElementById('signature-area');
+            const ctx = canvas.getContext('2d');
+            let drawing = false;
+            ctx.lineWidth = 2; ctx.strokeStyle = "#220000"; 
+            canvas.onmousedown = (e) => { drawing = true; ctx.beginPath(); ctx.moveTo(e.offsetX, e.offsetY); };
+            canvas.onmousemove = (e) => { if(drawing) { ctx.lineTo(e.offsetX, e.offsetY); ctx.stroke(); } };
+            canvas.onmouseup = () => { drawing = false; };
+            document.getElementById('sign-btn').onclick = () => {
+                document.getElementById('contract-container').style.display = 'none';
+                STATE.isContract = false;
+                HORROR_STATE.contractSigned = true;
+                document.getElementById('body-parts-bar').style.display = 'flex';
+                updateHUD();
+                document.body.requestPointerLock();
+                playSound('crunch'); 
+                resetBoard();
+                showNotification("CONTRACT SEALED.");
+            };
+        }
+
+        function showNotification(text) {
+            const el = document.getElementById('notification');
+            el.innerText = text;
+            el.style.opacity = 1;
+            if(el.timeout) clearTimeout(el.timeout);
+            el.timeout = setTimeout(() => { el.style.opacity = 0; }, 3000);
+        }
+
+        function initAudio() {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            masterGain = audioCtx.createGain(); // Create Master Gain
+            masterGain.connect(audioCtx.destination);
+            
+            startAmbience();
+            
+            demonOsc1 = audioCtx.createOscillator(); demonOsc1.type = 'sawtooth'; demonOsc1.frequency.value = 30; 
+            demonOsc2 = audioCtx.createOscillator(); demonOsc2.type = 'square'; demonOsc2.frequency.value = 35; demonOsc2.detune.value = 15;
+            demonGain = audioCtx.createGain(); demonGain.gain.value = 0; 
+            demonFilter = audioCtx.createBiquadFilter(); demonFilter.type = 'lowpass'; demonFilter.frequency.value = 200; 
+            demonShaper = audioCtx.createWaveShaper();
+            const curve = new Float32Array(4096);
+            for (let i = 0; i < 4096; i++) { const x = i * 2 / 4096 - 1; curve[i] = (3 + 20) * x * 20 * (Math.PI / 180) / (Math.PI + 20 * Math.abs(x)); }
+            demonShaper.curve = curve;
+
+            demonOsc1.connect(demonFilter); demonOsc2.connect(demonFilter);
+            demonFilter.connect(demonShaper); demonShaper.connect(demonGain); demonGain.connect(masterGain); // Connect to Master
+            demonOsc1.start(); demonOsc2.start();
+        }
+
+        function speakDealer(text) {
+            if (!CONFIG.ENABLE_DEALER_TTS || !('speechSynthesis' in window)) return;
+            window.speechSynthesis.cancel();
+            const u = new SpeechSynthesisUtterance(text);
+            if (ttsVoice) u.voice = ttsVoice;
+            u.pitch = CONFIG.DEALER_TTS_PITCH; u.rate = CONFIG.DEALER_TTS_RATE; u.volume = CONFIG.DEALER_TTS_VOLUME;
+            u.onstart = () => { startHorrorDrone(); };
+            u.onend = () => { stopHorrorDrone(); };
+            u.onerror = () => { stopHorrorDrone(); };
+            window.speechSynthesis.speak(u);
+        }
+
+        function startHorrorDrone() {
+            if(demonGain) {
+                demonGain.gain.cancelScheduledValues(audioCtx.currentTime);
+                demonGain.gain.setValueAtTime(0, audioCtx.currentTime);
+                demonGain.gain.linearRampToValueAtTime(0.5, audioCtx.currentTime + 0.1); 
+            }
+        }
+
+        function stopHorrorDrone() {
+            if(demonGain) {
+                demonGain.gain.cancelScheduledValues(audioCtx.currentTime);
+                demonGain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.2);
+            }
+        }
+
+        function startAmbience() {
+            const bufferSize = audioCtx.sampleRate * 2;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            let lastOut = 0; 
+            for (let i = 0; i < bufferSize; i++) {
+                const white = Math.random() * 2 - 1;
+                data[i] = (lastOut + (0.02 * white)) / 1.02;
+                lastOut = data[i];
+                data[i] *= 3.5; 
+            }
+            rainNode = audioCtx.createBufferSource();
+            rainNode.buffer = buffer;
+            rainNode.loop = true;
+            const gain = audioCtx.createGain();
+            gain.gain.value = 0.05;
+            rainNode.connect(gain);
+            gain.connect(masterGain); // Connect to Master
+            rainNode.start();
+
+            const osc = audioCtx.createOscillator();
+            osc.type = 'sine'; osc.frequency.value = 50;
+            const droneGain = audioCtx.createGain();
+            droneGain.gain.value = 0.05;
+            osc.connect(droneGain);
+            droneGain.connect(masterGain); // Connect to Master
+            osc.start();
+        }
+
+        function playSound(type) {
+            if(!audioCtx) return;
+            const t = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(masterGain); // Connect to Master
+
+            if (type === 'click') {
+                osc.type = 'triangle'; osc.frequency.setValueAtTime(800, t);
+                gain.gain.setValueAtTime(0.1, t); gain.gain.exponentialRampToValueAtTime(0.01, t+0.1);
+                osc.start(t); osc.stop(t+0.1);
+            }
+            else if (type === 'placeX') {
+                osc.type = 'square'; osc.frequency.setValueAtTime(100, t);
+                gain.gain.setValueAtTime(0.1, t); gain.gain.exponentialRampToValueAtTime(0.01, t+0.2);
+                osc.start(t); osc.stop(t+0.2);
+            }
+            else if (type === 'placeO') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(80, t);
+                gain.gain.setValueAtTime(0.1, t); gain.gain.exponentialRampToValueAtTime(0.01, t+0.3);
+                osc.start(t); osc.stop(t+0.3);
+            }
+            else if (type === 'cash') {
+                const o1 = audioCtx.createOscillator(); o1.type = 'sine'; o1.frequency.setValueAtTime(1000, t); o1.frequency.exponentialRampToValueAtTime(2000, t + 0.1);
+                const g1 = audioCtx.createGain(); g1.gain.setValueAtTime(0.3, t); g1.gain.exponentialRampToValueAtTime(0.01, t + 0.4);
+                o1.connect(g1); g1.connect(masterGain); o1.start(t); o1.stop(t + 0.4);
+                const o2 = audioCtx.createOscillator(); o2.type = 'square'; o2.frequency.setValueAtTime(3000, t + 0.1);
+                const g2 = audioCtx.createGain(); g2.gain.setValueAtTime(0.1, t + 0.1); g2.gain.exponentialRampToValueAtTime(0.01, t + 0.6);
+                o2.connect(g2); g2.connect(masterGain); o2.start(t + 0.1); o2.stop(t + 0.6);
+            }
+            else if (type === 'scare') {
+                [400, 440, 485].forEach(f => {
+                    const o = audioCtx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f;
+                    const g = audioCtx.createGain(); g.gain.setValueAtTime(0.2, t); g.gain.exponentialRampToValueAtTime(0.01, t+1.5);
+                    o.connect(g); g.connect(masterGain); o.start(t); o.stop(t+1.5);
+                });
+            }
+            else if (type === 'crunch') {
+                const bSize = audioCtx.sampleRate * 0.5; const buf = audioCtx.createBuffer(1, bSize, audioCtx.sampleRate); const d = buf.getChannelData(0);
+                for(let i=0; i<bSize; i++) d[i] = Math.random() * 2 - 1;
+                const n = audioCtx.createBufferSource(); n.buffer = buf;
+                const f = audioCtx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 1000;
+                const g = audioCtx.createGain(); g.gain.setValueAtTime(0.5, t); g.gain.exponentialRampToValueAtTime(0.01, t+0.4);
+                n.connect(f); f.connect(g); g.connect(masterGain); n.start(t);
+            }
+            else if (type === 'thunder') {
+                const bSize = audioCtx.sampleRate * 1.0; const buf = audioCtx.createBuffer(1, bSize, audioCtx.sampleRate); const d = buf.getChannelData(0);
+                for(let i=0; i<bSize; i++) d[i] = Math.random() * 2 - 1;
+                const n = audioCtx.createBufferSource(); n.buffer = buf;
+                const f = audioCtx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 200;
+                const g = audioCtx.createGain(); g.gain.setValueAtTime(0.8, t); g.gain.exponentialRampToValueAtTime(0.01, t+1.0);
+                n.connect(f); f.connect(g); g.connect(masterGain); n.start(t);
+            }
+            else if (type === 'glitch') {
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(50, t); osc.frequency.linearRampToValueAtTime(2000, t+0.1);
+                gain.gain.setValueAtTime(0.3, t); gain.gain.exponentialRampToValueAtTime(0.01, t+0.2);
+                osc.start(t); osc.stop(t+0.2);
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if (STATE.isPlaying && !STATE.isDialogue && !STATE.isContract && !HORROR_STATE.isDead) {
+                controls.rotation.x = 0; controls.rotation.z = 0;
+                const time = performance.now(); const delta = (time - prevTime) / 1000; prevTime = time;
+                velocity.x -= velocity.x * 10.0 * delta; velocity.z -= velocity.z * 10.0 * delta; velocity.y -= CONFIG.gravity * delta;
+                direction.z = Number(moveForward) - Number(moveBackward); direction.x = Number(moveRight) - Number(moveLeft); direction.normalize();
+                const currentSpeed = CONFIG.moveSpeed * (STATE.isRunning ? CONFIG.runSpeedMultiplier : 1.0);
+                if (moveForward || moveBackward) velocity.z -= direction.z * currentSpeed * delta;
+                if (moveLeft || moveRight) velocity.x -= direction.x * currentSpeed * delta;
+                const localMove = new THREE.Vector3(-velocity.x * delta, 0, velocity.z * delta);
+                const worldMove = localMove.clone().applyQuaternion(controls.quaternion);
+                controls.position.x += worldMove.x; if(checkCollision(controls.position)) { controls.position.x -= worldMove.x; velocity.x = 0; }
+                controls.position.z += worldMove.z; if(checkCollision(controls.position)) { controls.position.z -= worldMove.z; velocity.z = 0; }
+                controls.position.y += velocity.y * delta;
+                if (controls.position.y < CONFIG.playerHeight) { velocity.y = 0; controls.position.y = CONFIG.playerHeight; canJump = true; }
+
+                const isMoving = (moveForward || moveBackward || moveLeft || moveRight);
+                if (isMoving) {
+                    const bobFreq = STATE.isRunning ? 15 : 10; const bobAmp = STATE.isRunning ? 0.15 : 0.08; const t = time / 1000;
+                    camera.position.y = Math.sin(t * bobFreq) * bobAmp;
+                    handsGroup.position.y = Math.sin(t * bobFreq) * bobAmp * 1.5 - 0.2; handsGroup.position.x = Math.cos(t * bobFreq * 0.5) * 0.05;
+                    footstepTimer += delta;
+                    if (footstepTimer > CONFIG.footstepInterval) {
+                        if(audioCtx) {
+                            const osc = audioCtx.createOscillator(); const g = audioCtx.createGain(); osc.frequency.value = 100;
+                            g.gain.setValueAtTime(0.05, audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime+0.1);
+                            osc.connect(g); g.connect(masterGain); osc.start(); osc.stop(audioCtx.currentTime+0.1);
+                        }
+                        footstepTimer = 0;
+                    }
+                } else {
+                    camera.position.y = THREE.MathUtils.lerp(camera.position.y, 0, 0.1);
+                    handsGroup.position.y = THREE.MathUtils.lerp(handsGroup.position.y, -0.2, 0.1);
+                }
+                const distNPC = controls.position.distanceTo(npcMesh.position);
+                const interactText = document.getElementById('interact-prompt');
+                if (distNPC < CONFIG.interactDist) {
+                    interactText.style.display = 'block';
+                    if(!HORROR_STATE.contractSigned) interactText.innerText = "[E] Speak to The Dealer";
+                    if(STATE.isMobile) document.getElementById('btn-interact-mobile').style.display = 'flex';
+                } else { 
+                    interactText.style.display = 'none'; 
+                    if(STATE.isMobile) document.getElementById('btn-interact-mobile').style.display = 'none';
+                }
+            } else { prevTime = performance.now(); }
+
+            if(npcMesh) { const t = performance.now() / 2000; npcMesh.position.y = Math.sin(t) * 0.05; npcMesh.rotation.y = -Math.PI/4 + Math.sin(t*0.5) * 0.05; }
+            if(rainSystem) {
+                const positions = rainSystem.geometry.attributes.position.array;
+                for(let i=1; i<positions.length; i+=3) { positions[i] -= 0.5; if(positions[i] < 0) positions[i] = 40; }
+                rainSystem.geometry.attributes.position.needsUpdate = true;
+            }
+            fireLights.forEach(f => { f.light.intensity = f.base + (Math.random() - 0.5) * f.flicker; });
+            if(Math.random() < 0.005) {
+                flashLight.intensity = 2 + Math.random() * 5; setTimeout(() => { flashLight.intensity = 0; }, 100);
+                setTimeout(() => { playSound('thunder'); }, 200 + Math.random() * 800); 
+            }
+            placedPieces.forEach(p => { p.rotation.z += 0.01; });
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+    </script>
+</body>
+</html>
