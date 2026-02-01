@@ -1393,7 +1393,7 @@
             if (HORROR_STATE.contractSigned && !STATE.gameActive) { showNotification("The board is waiting."); return; }
             STATE.isDialogue = true;
             dialogueIndex = 0;
-            document.exitPointerLock(); 
+            if (!STATE.isMobile) document.exitPointerLock(); 
             document.getElementById('dialogue-container').style.display = 'block';
             updateDialogue();
         }
@@ -1434,16 +1434,50 @@
             const ctx = canvas.getContext('2d');
             let drawing = false;
             ctx.lineWidth = 2; ctx.strokeStyle = "#220000"; 
-            canvas.onmousedown = (e) => { drawing = true; ctx.beginPath(); ctx.moveTo(e.offsetX, e.offsetY); };
-            canvas.onmousemove = (e) => { if(drawing) { ctx.lineTo(e.offsetX, e.offsetY); ctx.stroke(); } };
-            canvas.onmouseup = () => { drawing = false; };
+            
+            // Helper for coords (from previous turn fix)
+            function getCoords(e) {
+                const rect = canvas.getBoundingClientRect();
+                let clientX, clientY;
+                if (e.touches && e.touches.length > 0) {
+                    clientX = e.touches[0].clientX;
+                    clientY = e.touches[0].clientY;
+                } else {
+                    clientX = e.clientX;
+                    clientY = e.clientY;
+                }
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
+            }
+
+            function startDraw(e) {
+                if (e.cancelable) e.preventDefault();
+                drawing = true;
+                const pos = getCoords(e);
+                ctx.beginPath(); ctx.moveTo(pos.x, pos.y);
+            }
+            function moveDraw(e) {
+                if (e.cancelable) e.preventDefault();
+                if (!drawing) return;
+                const pos = getCoords(e);
+                ctx.lineTo(pos.x, pos.y); ctx.stroke();
+            }
+            function stopDraw(e) {
+                if (e.cancelable) e.preventDefault();
+                drawing = false;
+            }
+
+            canvas.onmousedown = startDraw; canvas.onmousemove = moveDraw; canvas.onmouseup = stopDraw; canvas.onmouseout = stopDraw;
+            canvas.ontouchstart = startDraw; canvas.ontouchmove = moveDraw; canvas.ontouchend = stopDraw;
+
             document.getElementById('sign-btn').onclick = () => {
                 document.getElementById('contract-container').style.display = 'none';
                 STATE.isContract = false;
                 HORROR_STATE.contractSigned = true;
                 document.getElementById('body-parts-bar').style.display = 'flex';
                 updateHUD();
-                document.body.requestPointerLock();
+                if(!STATE.isMobile) document.body.requestPointerLock();
                 playSound('crunch'); 
                 resetBoard();
                 showNotification("CONTRACT SEALED.");
@@ -1460,7 +1494,7 @@
 
         function initAudio() {
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            masterGain = audioCtx.createGain(); // Create Master Gain
+            masterGain = audioCtx.createGain();
             masterGain.connect(audioCtx.destination);
             
             startAmbience();
@@ -1475,7 +1509,7 @@
             demonShaper.curve = curve;
 
             demonOsc1.connect(demonFilter); demonOsc2.connect(demonFilter);
-            demonFilter.connect(demonShaper); demonShaper.connect(demonGain); demonGain.connect(masterGain); // Connect to Master
+            demonFilter.connect(demonShaper); demonShaper.connect(demonGain); demonGain.connect(masterGain); 
             demonOsc1.start(); demonOsc2.start();
         }
 
@@ -1523,7 +1557,7 @@
             const gain = audioCtx.createGain();
             gain.gain.value = 0.05;
             rainNode.connect(gain);
-            gain.connect(masterGain); // Connect to Master
+            gain.connect(masterGain); 
             rainNode.start();
 
             const osc = audioCtx.createOscillator();
@@ -1531,7 +1565,7 @@
             const droneGain = audioCtx.createGain();
             droneGain.gain.value = 0.05;
             osc.connect(droneGain);
-            droneGain.connect(masterGain); // Connect to Master
+            droneGain.connect(masterGain); 
             osc.start();
         }
 
@@ -1541,7 +1575,7 @@
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
             osc.connect(gain);
-            gain.connect(masterGain); // Connect to Master
+            gain.connect(masterGain);
 
             if (type === 'click') {
                 osc.type = 'triangle'; osc.frequency.setValueAtTime(800, t);
@@ -1593,6 +1627,19 @@
                 osc.type = 'sawtooth'; osc.frequency.setValueAtTime(50, t); osc.frequency.linearRampToValueAtTime(2000, t+0.1);
                 gain.gain.setValueAtTime(0.3, t); gain.gain.exponentialRampToValueAtTime(0.01, t+0.2);
                 osc.start(t); osc.stop(t+0.2);
+            }
+            else if (type === 'giggle') {
+                 const o = audioCtx.createOscillator(); o.type = 'triangle'; const g = audioCtx.createGain();
+                 o.frequency.setValueAtTime(600, t); o.frequency.linearRampToValueAtTime(800, t+0.1);
+                 o.frequency.linearRampToValueAtTime(500, t+0.2); o.frequency.linearRampToValueAtTime(700, t+0.3);
+                 o.frequency.linearRampToValueAtTime(400, t+0.4);
+                 g.gain.setValueAtTime(0.5, t); g.gain.exponentialRampToValueAtTime(0.01, t+0.5);
+                 o.connect(g); g.connect(masterGain); o.start(t); o.stop(t+0.5);
+            }
+            else if (type === 'warning') {
+                const o = audioCtx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 60; const g = audioCtx.createGain();
+                g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.5, t+1.0); g.gain.linearRampToValueAtTime(0, t+3.0);
+                o.connect(g); g.connect(masterGain); o.start(t); o.stop(t+3.0);
             }
         }
 
