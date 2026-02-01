@@ -602,7 +602,7 @@
             if (STATE.isMobile) {
                 document.getElementById('mobile-controls').style.display = 'block';
                 document.body.classList.remove('is-desktop');
-                CONFIG.sensitivity *= 1.5; // Touch needs higher sens
+                CONFIG.sensitivity *= 3.0; // Touch needs higher sens
             } else {
                 document.body.classList.add('is-desktop');
             }
@@ -967,12 +967,18 @@
 
         // --- Touch Camera Control ---
         function onTouchStart(e) {
-            // Ignore if touching UI buttons
-            if (e.target.classList.contains('mobile-btn') || e.target.closest('.menu-view')) return;
-            if (e.touches.length === 1) {
-                lastTouchX = e.touches[0].clientX;
-                lastTouchY = e.touches[0].clientY;
-                touchDragId = e.touches[0].identifier;
+            // Iterate through changed touches to find one that isn't on a UI element
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const t = e.changedTouches[i];
+                // Check target to ensure it's not a button or menu
+                if (!t.target.classList.contains('mobile-btn') && !t.target.closest('.menu-view')) {
+                    // Only start tracking if we aren't already tracking a look touch
+                    if (touchDragId === null) {
+                        lastTouchX = t.clientX;
+                        lastTouchY = t.clientY;
+                        touchDragId = t.identifier;
+                    }
+                }
             }
         }
 
