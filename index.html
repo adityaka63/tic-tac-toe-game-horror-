@@ -1157,9 +1157,40 @@
 
             btnPause.addEventListener('touchstart', (e) => { e.preventDefault(); showMenu('pause'); document.getElementById('blocker').style.display = 'flex'; STATE.isPlaying = false; });
             
-            const handleMoveBtn = (btn, dir, val) => {
-                btn.addEventListener('touchstart', (e) => { e.preventDefault(); switch(dir){ case 'f': moveForward=true; break; case 'b': moveBackward=true; break; case 'l': moveLeft=true; break; case 'r': moveRight=true; break;} });
-                btn.addEventListener('touchend', (e) => { e.preventDefault(); switch(dir){ case 'f': moveForward=false; break; case 'b': moveBackward=false; break; case 'l': moveLeft=false; break; case 'r': moveRight=false; break;} });
+            // Double tap logic variables
+            const lastTapTime = { f: 0, b: 0, l: 0, r: 0 };
+            const doubleTapThreshold = 300; // ms
+
+            const handleMoveBtn = (btn, dir) => {
+                btn.addEventListener('touchstart', (e) => { 
+                    e.preventDefault(); 
+                    const now = Date.now();
+                    
+                    // Check for double tap to activate sprint
+                    if (now - lastTapTime[dir] < doubleTapThreshold) {
+                        STATE.isRunning = true;
+                    }
+                    lastTapTime[dir] = now;
+
+                    switch(dir){ 
+                        case 'f': moveForward=true; break; 
+                        case 'b': moveBackward=true; break; 
+                        case 'l': moveLeft=true; break; 
+                        case 'r': moveRight=true; break;
+                    } 
+                });
+                btn.addEventListener('touchend', (e) => { 
+                    e.preventDefault(); 
+                    // Stop sprinting when button is released
+                    STATE.isRunning = false;
+
+                    switch(dir){ 
+                        case 'f': moveForward=false; break; 
+                        case 'b': moveBackward=false; break; 
+                        case 'l': moveLeft=false; break; 
+                        case 'r': moveRight=false; break;
+                    } 
+                });
             };
 
             handleMoveBtn(btnUp, 'f');
